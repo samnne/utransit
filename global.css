@@ -1,0 +1,27 @@
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);
+@import "tailwindcss/utilities.css";
+
+@import "nativewind/theme";
+:root[data-theme="light"] {
+  --text: #1a0b11;
+  --background: #fdf8fa;
+  --primary: #d23b6d;
+  --secondary: #ec7da2;
+  --accent: #f0457f;
+}
+:root[data-theme="dark"] {
+  --text: #f4e6ec;
+  --background: #080205;
+  --primary: #c32c5f;
+  --secondary: #811338;
+  --accent: #b80f47;
+}
+
+@theme {
+  --color-text: var(--text);
+  --color-background: var(--background);
+  --color-primary: var(--primary);
+  --color-secondary: var(--secondary);
+  --color-accent: var(--accent);
+}

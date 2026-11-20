@@ -1,98 +1,121 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Location from "expo-location";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ScrollView, View } from "react-native";
+import { BASE_URL } from "../../constants";
+import { calculateHaversineDistance, groupByRoute } from "../../utils";
+import { BusGroup } from "../components/BusGroup";
+import { BusModal } from "../components/BusModal";
+import { Header } from "../components/Header";
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+export default function App() {
+  const [realtime, setRealtime] = useState<Bus[]>([]);
+  const [showModal, setShowModal] = useState(false);
+  const [location, setLocation] = useState<Location.LocationObject | null>(
+    null,
+  );
+  const [fetchedBus, setFetchedBus] = useState<BusSchedule>();
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
+  const groups = useMemo(
+    () =>
+      location
+        ? groupByRoute(realtime, {
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+          })
+        : [],
+    [realtime, location],
+  );
+
+  const fetchRealTime = useCallback(async () => {
+    try {
+      const response = await fetch(`${BASE_URL}/fetch`);
+      const data = await response.json();
+      if (!data) return;
+
+      const dataList: Bus[] = data.entity;
+      if (location) {
+        const origin = {
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        };
+        const distTo = (b: Bus) =>
+          calculateHaversineDistance(origin, {
+            latitude: b.vehicle.position.latitude,
+            longitude: b.vehicle.position.longitude,
+          });
+        dataList.sort((a, b) => distTo(a) - distTo(b));
+      }
+      setRealtime(dataList);
+    } catch (error) {
+      console.log(error);
+    }
+  }, [location]);
+
+  const fetchBus = async (id: string) => {
+    try {
+      const response = await fetch(`${BASE_URL}/trips/${id}`);
+      const data = await response.json();
+      if (data) {
+        setFetchedBus(data);
+        setShowModal(true);
+      }
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  useEffect(() => {
+    async function getCurrentLocation() {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        return;
+      }
+
+      const currentLocation = await Location.getCurrentPositionAsync({});
+      setLocation(currentLocation);
+    }
+
+    getCurrentLocation();
+  }, []);
+
+  useEffect(() => {
+    const loadData = async () => {
+      await fetchRealTime();
+    };
+    loadData();
+    const interval = setInterval(loadData, 15000);
+    return () => clearInterval(interval);
+  }, [fetchRealTime]);
+
+  const userLocation = location
+    ? {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      }
+    : null;
+
   return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
+    <View className="flex-1 items-center bg-background">
+      <Header onRefresh={fetchRealTime} />
+
+      <ScrollView className="bg-accent w-full flex-1">
+        {groups.map((group) => (
+          <BusGroup
+            key={group.key}
+            group={group}
+            location={userLocation}
+            onSelectBus={fetchBus}
+          />
+        ))}
+      </ScrollView>
+
+      <BusModal
+        bus={fetchedBus}
+        groupBus={location?.coords}
+        setFetchedBus={setFetchedBus}
+        setShowModal={setShowModal}
+        showModal={showModal}
+      />
+    </View>
   );
 }
-
-export default function HomeScreen() {
-  return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
-
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
-
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
-
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
-  },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
-  },
-  title: {
-    textAlign: 'center',
-  },
-  code: {
-    textTransform: 'uppercase',
-  },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
-  },
-});
