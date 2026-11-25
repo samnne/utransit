@@ -1,5 +1,7 @@
 # uTransit
 
+## THIS PROJECT IS THE MOBILE FRONTEND TO [utransit-backend](https://github.com/samnne/go_playground)
+
 uTransit is a location-aware bus tracker built with Expo, React Native, and TypeScript. It displays live vehicle data from an external transit API, groups buses by route, and lets you open a trip to view its stops and scheduled arrival times.
 
 ## Current features
